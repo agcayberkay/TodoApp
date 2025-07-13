@@ -1,0 +1,179 @@
+﻿@page "/todo"
+@using Application.Interface
+@using Domain.Entities
+@inject ITodoService TodoService
+
+<h3 class="text-center mb-4">Yapılacaklar Listesi</h3>
+
+<!-- Filtre ve Arama -->
+<div class="mb-4 d-flex justify-content-between align-items-center">
+    <div>
+        <button class="btn btn-outline-primary me-2 @(filter == "all" ? "active" : "")"
+                @onclick='() => SetFilter("all")'>
+            Tüm Görevler
+        </button>
+
+        <button class="btn btn-outline-success me-2 @(filter == "completed" ? "active" : "")"
+                @onclick='() => SetFilter("completed")'>
+            Tamamlananlar
+        </button>
+
+        <button class="btn btn-outline-warning @(filter == "pending" ? "active" : "")"
+                @onclick='() => SetFilter("pending")'>
+            Tamamlanmayanlar
+        </button>
+    </div>
+    <input type="text" class="form-control w-25" placeholder="Ara..." @bind="searchTerm" @bind:event="oninput" />
+</div>
+
+<!-- Yeni Görev Ekleme -->
+<div class="mb-4">
+    <input @bind="newTodo.Title" placeholder="Görev başlığı" class="form-control mb-2" />
+    <textarea @bind="newTodo.Description" placeholder="Açıklama" class="form-control mb-2"></textarea>
+    <button class="btn btn-primary" @onclick="AddTodo">Görev Ekle</button>
+</div>
+
+<!-- Görev Kartları -->
+<div class="row">
+    @if (!FilteredTodos.Any())
+    {
+        <p class="text-center">Görev bulunamadı.</p>
+    }
+    else
+    {
+        @foreach (var todo in FilteredTodos)
+        {
+            var isEditing = editingTodoId == todo.Id;
+            var cardClass = todo.IsCompleted ? "card shadow-sm bg-light text-muted" : "card shadow-sm";
+
+            <div class="col-md-4 mb-3">
+                <div class="@cardClass" style="position: relative;">
+                    <div class="card-body">
+
+                        @if (isEditing)
+                        {
+                            <input class="form-control mb-2" @bind="editTitle" placeholder="Başlık" />
+                            <textarea class="form-control mb-2" @bind="editDescription" placeholder="Açıklama"></textarea>
+
+                            <button class="btn btn-success btn-sm me-2" @onclick="() => SaveEdit(todo)">Kaydet</button>
+                            <button class="btn btn-secondary btn-sm" @onclick="CancelEdit">İptal</button>
+                        }
+                        else
+                        {
+                            <h5 class="card-title" style="@(todo.IsCompleted ? "text-decoration: line-through;" : "")">@todo.Title</h5>
+                            <p class="card-text">@todo.Description</p>
+                            <p class="text-muted small">@todo.CreatedAt.ToString("dd MMM yyyy HH:mm")</p>
+
+                            <button class="btn btn-primary btn-sm me-2" @onclick="() => StartEdit(todo)">Düzenle</button>
+                            <button class="btn btn-danger btn-sm" @onclick="() => DeleteTodo(todo.Id)">Sil</button>
+
+                            <div class="form-check mt-2">
+                                <input type="checkbox"
+                                       class="form-check-input"
+                                       checked="@todo.IsCompleted"
+                                       @onchange="async e => await OnCheckboxChanged(e, todo)" />
+                                <label class="form-check-label">Tamamlandı</label>
+                            </div>
+                        }
+                    </div>
+
+                    @if (todo.IsCompleted)
+                    {
+                        <div style="
+                            position: absolute;
+                            top: 0; left: 0; width: 100%; height: 100%;
+                            background: repeating-linear-gradient(
+                                45deg,
+                                rgba(0,0,0,0.05),
+                                rgba(0,0,0,0.05) 10px,
+                                transparent 10px,
+                                transparent 20px
+                            );
+                            pointer-events:none;
+                                        "></div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<TodoItem> todoList = new();
+    private TodoItem newTodo = new() { Title = "", Description = "" };
+
+    private int? editingTodoId = null;
+    private string editTitle = "";
+    private string editDescription = "";
+
+    private string filter = "all";
+    private string searchTerm = "";
+
+    private IEnumerable<TodoItem> FilteredTodos => todoList
+        .Where(todo =>
+            (filter == "all" ||
+             (filter == "completed" && todo.IsCompleted) ||
+             (filter == "pending" && !todo.IsCompleted))
+            &&
+            (string.IsNullOrWhiteSpace(searchTerm) || todo.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        );
+
+    protected override async Task OnInitializedAsync()
+    {
+        todoList = await TodoService.GetAllAsync();
+    }
+    private void SetFilter(string value)
+    {
+        filter = value;
+    }
+
+    private async Task AddTodo()
+    {
+        if (!string.IsNullOrWhiteSpace(newTodo.Title))
+        {
+            await TodoService.AddAsync(newTodo);
+            newTodo = new TodoItem();
+            todoList = await TodoService.GetAllAsync();
+            StateHasChanged();
+        }
+    }
+
+    private void StartEdit(TodoItem todo)
+    {
+        editingTodoId = todo.Id;
+        editTitle = todo.Title;
+        editDescription = todo.Description;
+    }
+
+    private void CancelEdit()
+    {
+        editingTodoId = null;
+    }
+
+    private async Task SaveEdit(TodoItem todo)
+    {
+        todo.Title = editTitle;
+        todo.Description = editDescription;
+
+        await TodoService.UpdateAsync(todo);
+        todoList = await TodoService.GetAllAsync();
+
+        editingTodoId = null;
+        StateHasChanged();
+    }
+
+    private async Task OnCheckboxChanged(ChangeEventArgs e, TodoItem todo)
+    {
+        todo.IsCompleted = (bool)e.Value!;
+        await TodoService.UpdateAsync(todo);
+        todoList = await TodoService.GetAllAsync();
+        StateHasChanged();
+    }
+
+    private async Task DeleteTodo(int id)
+    {
+        await TodoService.DeleteAsync(id);
+        todoList = await TodoService.GetAllAsync();
+        StateHasChanged();
+    }
+}

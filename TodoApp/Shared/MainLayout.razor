@@ -1,0 +1,94 @@
+﻿@inherits LayoutComponentBase
+
+<div class="d-flex">
+    <!-- Sidebar -->
+    <nav class="sidebar d-flex flex-column vh-100 p-3 bg-primary text-white"
+         style="width: 250px; @(!sidebarVisible ? "display: none;" : "")">
+        <a href="" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+            <span class="fs-4">Yapılacaklar</span>
+        </a>
+        <hr />
+        <ul class="nav nav-pills flex-column mb-auto">
+            <li class="nav-item">
+                <NavLink href="" class="nav-link text-white" Match="NavLinkMatch.All" activeclassname="active">
+                    <i class="bi bi-house-door"></i> Anasayfa
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="todo" class="nav-link text-white" activeclassname="active">
+                    <i class="bi bi-list-check"></i> Yapılacaklar
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="about" class="nav-link text-white" activeclassname="active">
+                    <i class="bi bi-info-circle"></i> Hakkında
+                </NavLink>
+            </li>
+        </ul>
+    </nav>
+
+
+    <!-- Main Content -->
+    <div class="flex-grow-1">
+        <button class="btn btn-primary m-2 d-lg-none" @onclick="ToggleSidebar">
+            <i class="bi bi-list"></i> Menü
+        </button>
+
+        <main class="p-4" style="margin-left:@(sidebarVisible && IsLargeScreen ? "250px" : "0")">
+            @Body
+        </main>
+    </div>
+</div>
+
+@code {
+    private bool sidebarVisible = true;
+    private bool IsLargeScreen => windowWidth >= 992; // Bootstrap lg breakpoint
+
+    private int windowWidth;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await GetWindowSize();
+            StateHasChanged();
+            await JS.InvokeVoidAsync("blazorResize.registerResizeHandler", DotNetObjectReference.Create(this));
+        }
+    }
+
+    [Inject] private IJSRuntime JS { get; set; }
+
+    [JSInvokable]
+    public async Task OnResize(int width, int height)
+    {
+        windowWidth = width;
+        // Büyük ekranda sidebar hep görünsün
+        if (IsLargeScreen && !sidebarVisible)
+        {
+            sidebarVisible = true;
+            StateHasChanged();
+        }
+        else if (!IsLargeScreen && sidebarVisible)
+        {
+            sidebarVisible = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSidebar()
+    {
+        sidebarVisible = !sidebarVisible;
+    }
+
+    private async Task GetWindowSize()
+    {
+        var size = await JS.InvokeAsync<WindowSize>("blazorResize.getWindowSize");
+        windowWidth = size.Width;
+    }
+
+    private class WindowSize
+    {
+        public int Width { get; set; }
+        public int Height { get; set; }
+    }
+}

@@ -1,0 +1,125 @@
+﻿@page "/"
+@using Domain.Entities
+@inject Application.Interface.ITodoService TodoService
+
+<h3>Görev İstatistikleri</h3>
+
+@if (isLoading)
+{
+    <p>Yükleniyor...</p>
+}
+else
+{
+    <p>Veri sayısı: @TotalCount</p>
+    <div class="row">
+        <div class="col-md-6" style="max-width: 400px; height: 350px;">
+            <PieChart TItem="double" Options="pieOptions" @ref="pieChart" />
+        </div>
+        <div class="col-md-6 d-flex align-items-center justify-content-center">
+            <div class="card bg-light p-4 shadow">
+                <h5 class="card-title">Toplam Görev</h5>
+                <p class="display-4">@TotalCount</p>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card bg-success text-white p-3 shadow text-center">
+                <h6>Tamamlanan Görevler</h6>
+                <p class="fs-3 mb-0">@CompletedCount</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark p-3 shadow text-center">
+                <h6>Bekleyen Görevler</h6>
+                <p class="fs-3 mb-0">@PendingCount</p>
+            </div>
+        </div>
+    </div>
+
+    <h4 class="mt-5">Zaman İçinde Görev Durumu (Line Chart)</h4>
+    <div class="row">
+        <div class="col-md-8" style="max-width: 600px; height: 350px;">
+            <LineChart TItem="double" Options="lineOptions" @ref="lineChart" />
+        </div>
+    </div>
+}
+
+@code {
+    private PieChart<double> pieChart;
+    private PieChartOptions pieOptions = new PieChartOptions
+        {
+            Responsive = true,
+            MaintainAspectRatio = false
+        };
+
+    private LineChart<double> lineChart;
+    private LineChartOptions lineOptions = new LineChartOptions
+        {
+            Responsive = true,
+            MaintainAspectRatio = false
+        };
+
+    private bool isLoading = true;
+
+    private int TotalCount;
+    private int CompletedCount;
+    private int PendingCount;
+
+    // Örnek aylık veri - gerçek veriye göre değiştirilebilir
+    private string[] months = new[] { "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran" };
+    private List<double> completedMonthly = new() { 5, 10, 8, 15, 12, 20 };
+    private List<double> pendingMonthly = new() { 10, 5, 12, 8, 15, 10 };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var todos = await TodoService.GetAllTodosAsync() ?? new List<TodoItem>();
+
+        TotalCount = todos.Count;
+        CompletedCount = todos.Count(t => t.IsCompleted);
+        PendingCount = TotalCount - CompletedCount;
+
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !isLoading)
+        {
+            if (pieChart != null)
+            {
+                await pieChart.Clear();
+                await pieChart.AddLabelsDatasetsAndUpdate(
+                    new[] { "Tamamlanan", "Bekleyen" },
+                    new PieChartDataset<double>
+                        {
+                            Data = new List<double> { CompletedCount, PendingCount },
+                            BackgroundColor = new List<string> { "green", "orange" }
+                        }
+                );
+            }
+
+            if (lineChart != null)
+            {
+                await lineChart.Clear();
+                await lineChart.AddLabelsDatasetsAndUpdate(
+                    months,
+                    new LineChartDataset<double>
+                        {
+                            Label = "Tamamlanan",
+                            Data = completedMonthly,
+                            BorderColor = "green",
+                            Fill = false
+                        },
+                    new LineChartDataset<double>
+                        {
+                            Label = "Bekleyen",
+                            Data = pendingMonthly,
+                            BorderColor = "orange",
+                            Fill = false
+                        }
+                );
+            }
+        }
+    }
+}
